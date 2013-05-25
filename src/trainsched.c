@@ -72,7 +72,11 @@ struct {
 } strBuffers;
 
 unsigned short scheduleIdx;
-unsigned short scheduleAlarmIdx;
+
+struct {
+  unsigned short idx;
+  int time_in_minutes;
+} alarmStatus;
 
 struct location_t {
   char name[MAX_LOCATION_LEN+1];
@@ -180,7 +184,7 @@ void update_display()
     }
   }
 
-  layer_set_hidden(&uiLayers.alarmIcon.layer, scheduleIdx != scheduleAlarmIdx);
+  layer_set_hidden(&uiLayers.alarmIcon.layer, scheduleIdx != alarmStatus.idx);
 
   mini_snprintf(strBuffers.pageCount, sizeof(strBuffers.pageCount),
               "(%d/%d)", scheduleIdx+1, N_OF(schedules));
@@ -194,15 +198,15 @@ void select_schedule(void)
 
 void handle_tick(AppContextRef ctx, PebbleTickEvent *event)
 {
-  if (scheduleAlarmIdx != ALARM_UNSET) {
+  if (alarmStatus.idx != ALARM_UNSET) {
     PblTm time;
-    const struct schedule_t *sched = &schedules[scheduleAlarmIdx];
     get_time(&time);
 
-    if ((time_in_minutes(&sched->station[FIRST_STATION].time) - ALARM_WARNING_MINUTES) == time_in_minutes(&time)) {
+    if (time_in_minutes(&time) == alarmStatus.time_in_minutes) {
       vibes_long_pulse();
       vibes_long_pulse();
-      scheduleAlarmIdx = ALARM_UNSET;
+      alarmStatus.idx = ALARM_UNSET;
+      alarmStatus.time_in_minutes = 0;
     }
   }
 
@@ -233,10 +237,22 @@ void select_single_click_handler(ClickRecognizerRef recognizer, Window *window) 
   (void)recognizer;
   (void)window;
 
-  if (scheduleAlarmIdx == scheduleIdx) {
-    scheduleAlarmIdx = ALARM_UNSET;
+  if (alarmStatus.idx == scheduleIdx) {
+    alarmStatus.idx = ALARM_UNSET;
   } else {
-    scheduleAlarmIdx = scheduleIdx;
+    PblTm cur_time;
+    const struct schedule_t *sched = &schedules[scheduleIdx];
+    int i;
+
+    get_time(&cur_time);
+    for (i = 0; i < NUM_STATIONS; i++) {
+      int alarm_time = time_in_minutes(&sched->station[i].time) - ALARM_WARNING_MINUTES;
+      if (alarm_time > time_in_minutes(&cur_time)) {
+        alarmStatus.time_in_minutes = alarm_time;
+        alarmStatus.idx = scheduleIdx;
+        break;
+      }
+    }
   }
 
   update_display();
@@ -271,7 +287,7 @@ void handle_init(AppContextRef ctx) {
   window_stack_push(&window, true /* Animated */);
 
   scheduleIdx = 0;
-  scheduleAlarmIdx = ALARM_UNSET;
+  alarmStatus.idx = ALARM_UNSET;
 
   for (i = 0; i < NUM_STATIONS; i++) {
     text_layer_init(&uiLayers.stationName[i], GRect(STATION_NAME_X, STATION_Y+(i*STATION_H), STATION_NAME_W, STATION_H));
