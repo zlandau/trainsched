@@ -91,7 +91,7 @@ int has_time_passed(const PblTm *curTime, const PblTm *cmpTime)
     return 1;
   if (cmpTime->tm_hour > curTime->tm_hour)
     return 0;
-  return cmpTime->tm_min < curTime->tm_min;
+  return cmpTime->tm_min <= curTime->tm_min;
 }
 
 int time_in_minutes(const PblTm *tm)
